@@ -12,11 +12,12 @@ contract ReLeef is ERC20, Ownable {
 
     using SafeMath for uint256;
     
-    address private tFundPool = address(0);
-    address private rFundPool = address(1);
+    address private tokFundPool = address(0);
+    address private remFundPool = address(1);
     address private bPool = address(2);
     address public manager;
-
+    uint256 public tStaked;
+    uint256 public tLiqSupply;
 
     mapping(address => uint256) balances;
 
@@ -28,10 +29,11 @@ contract ReLeef is ERC20, Ownable {
         uint256 rewards;
         uint start;
     }
+
     mapping(address => Stakes) stakeholders;
     
-  //  mapping(address => bool) stakeholders;
- //   mapping(address => uint256) stakes;
+    //staking pool
+    Stakes[] public stakePool;
  
  
     //9 decimals is a billion
@@ -86,6 +88,10 @@ contract ReLeef is ERC20, Ownable {
 
     function totalSupply() public view override returns (uint256) {
         return _tSupply;
+    }
+
+    function showTotalStaked() public view returns (uint256) {
+        return tStaked;
     }
 
     function showBurnSupply() public view returns (uint256) {
@@ -149,23 +155,32 @@ contract ReLeef is ERC20, Ownable {
     function rewardOf(address user) public view returns (uint256) {
         return stakeholders[user].rewards;
     }
+
+    function rewardRate(uint256 _stakeSupply, uint256 _liqSupply) public view returns (uint256) {
+        uint256 rate = _liqSupply.div(_stakeSupply);
+        //if stake supply is greater than liquidity supply then the
+        //reward rate gets capped at 150%
+        if (rate > 1.5 && _liqSupply != 0 ) {
+            rate = 1.5;
+        }
+        return rate;
+    }
     
-    //calculates the reward to be given to stakeholder based on the amount they have
-    //and how long it has been staked for
-    function calcReward(address user) public view returns (uint256) {
+    //calculates the pending reward to be given to stakeholder
+    function pendingReward(address user) public {
         //calcs the time since start of stake
         uint256 mins = (block.timestamp - stakeholders[user].start).div(60);
+        uint256 staked = stakeholders[user].amount;
+
         //if staked less than a min, no reward
         if(mins < 1) {
             return 0;
         } else {
-            //otherwise, each min gets 1%
-
-            //PLACEHOLDER CALCULATION ONLY
-            //MUST CALCULATE BASED ON LIQUIDITY/TOTAL AMOUNT STAKED
-            uint256 value = stakeholders[user].amount.div(100).mul(mins);
-            return value;
+            //reward APR is calculated as (amount staked * reward rate)/number of mins in a year
+            //APR is applied to the number of minutes user has staked for
+            stakeholders[user].rewards = stakeholders[user].rewards.add(staked.mul(rewardRate()).div(525600).mul(mins));
         }
+
     }
     
     function distributeReward(address _address) public onlyOwner {
